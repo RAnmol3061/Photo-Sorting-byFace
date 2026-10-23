@@ -4,6 +4,7 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
+import shutil
 from pathlib import Path
 
 import cv2
@@ -41,7 +42,12 @@ def load_img(dir: str) -> list:
     return valid_img
 
 
-# def makecopy(main_dir: str, )
+def makecopy(matched_images: list):
+    matches_dir = Path("matches")
+    matches_dir.mkdir(exist_ok=True)
+    for img in matched_images:
+        destination = matches_dir / img.name
+        shutil.copy(img, destination)
 
 
 def comparison(target_dir: str, img_dir: str) -> list:
@@ -81,7 +87,7 @@ def comparison(target_dir: str, img_dir: str) -> list:
                     break
             if is_match:
                 matched_photos.append(img)
-            print(f"Match Found: {img.name}")
+                print(f"Match Found: {img.name}")
         except Exception as e:
             print(f"Error processing {img.name}: {e}")
     return matched_photos
