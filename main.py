@@ -40,19 +40,20 @@ def load_img(dir: str) -> list:
     ]
     return valid_img
 
-def makecopy(main_dir: str, )
+
+# def makecopy(main_dir: str, )
 
 
-def comparison(target_dir: str, img_dir: str):
+def comparison(target_dir: str, img_dir: str) -> list:
     valid_img = load_img(img_dir)
-    face_emb = target_emb(target_dir)
+    target_embbeddings = target_emb(target_dir)
 
     threshold = 0.50
-    matched_count = 0
+    matched_photos = []
 
     for img in valid_img:
         bgr_img = cv2.imread(img)
-        rgb_img = cv2.cvtcolor(bgr_img, cv2.COLOR_BGR2RGB)
+        rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
 
         try:
             rep = DeepFace.represent(
@@ -65,11 +66,11 @@ def comparison(target_dir: str, img_dir: str):
 
             is_match = False
             for face in rep:
-                face_emb = np.array(face["embedding"])
+                album_emb = np.array(face["embedding"])
 
-                for target_face_emb in face_emb:
-                    cos_sin = np.dot(face_emb, target_face_emb) / (
-                        np.linalg.norm(face_emb) * np.linalg.norm(target_face_emb)
+                for target_face_emb in target_embbeddings:
+                    cos_sin = np.dot(album_emb, target_face_emb) / (
+                        np.linalg.norm(album_emb) * np.linalg.norm(target_face_emb)
                     )
 
                     distace = 1 - cos_sin
@@ -79,8 +80,8 @@ def comparison(target_dir: str, img_dir: str):
                 if is_match:
                     break
             if is_match:
-                
-                destination = 
-                pass
-        except Exception:
-            pass
+                matched_photos.append(img)
+            print(f"Match Found: {img.name}")
+        except Exception as e:
+            print(f"Error processing {img.name}: {e}")
+    return matched_photos
