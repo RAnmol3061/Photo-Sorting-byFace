@@ -28,3 +28,12 @@ def target_emb(dir: str):  # dir is directory of target images
             )
 
             target_emb_list.append(np.array(rep[0]["embedding"]))
+
+
+def load_img(dir: str):
+    img_dir = Path(dir)
+    valid_img = [
+        p
+        for p in img_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+    ]
