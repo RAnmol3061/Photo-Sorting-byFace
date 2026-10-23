@@ -10,6 +10,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from deepface import DeepFace
+from dotenv import load_dotenv
 
 
 def target_emb(dir: str) -> list:  # dir is directory of target images
@@ -91,3 +92,21 @@ def comparison(target_dir: str, img_dir: str) -> list:
         except Exception as e:
             print(f"Error processing {img.name}: {e}")
     return matched_photos
+
+
+if __name__ == "__main__":
+    load_dotenv()
+
+    target_dir_path = os.getenv("TARGET_DIR")
+    album_dir_path = os.getenv("IMG_DIR")
+
+    print("Starting face matching pipeline")
+    final_matches = comparison(target_dir_path, album_dir_path)
+    print(f"Scaning complete! Found {len(final_matches)} matches")
+
+    if final_matches:
+        print("Creating copies to matches directory")
+        makecopy(final_matches)
+        print("Done")
+    else:
+        print("Final Matches was empty")
