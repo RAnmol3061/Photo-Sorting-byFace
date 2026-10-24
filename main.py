@@ -26,11 +26,10 @@ def target_emb(dir: str) -> list:  # dir is directory of target images
             img_array = cv2.imread(img)
             if img_array is None:
                 continue
-            rgb_img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
 
             rep = DeepFace.represent(
                 align=True,
-                img_path=rgb_img_array,
+                img_path=img_array,
                 model_name="ArcFace",
                 enforce_detection=False,
                 detector_backend="retinaface",
@@ -55,11 +54,10 @@ def target_emb_master(dir: str) -> list:
                     img_array = cv2.imread(target_files)
                     if img_array is None:
                         continue
-                    rgb_img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
 
                     rep = DeepFace.represent(
                         align=True,
-                        img_path=rgb_img_array,
+                        img_path=img_array,
                         model_name="ArcFace",
                         enforce_detection=False,
                         detector_backend="retinaface",
@@ -101,8 +99,7 @@ def producer_comparison(img_dir: str):
         bgr_img = cv2.imread(img)
         if bgr_img is None:
             continue
-        rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
-        image_queue.put((rgb_img, img))
+        image_queue.put((bgr_img, img))
     image_queue.put((None, None))
 
 
@@ -112,14 +109,14 @@ def consumer_comparison(target_dir: str, results_queue: queue.Queue):
     threshold = 0.50
 
     while True:
-        rgb_img, img = image_queue.get()
-        if rgb_img is None:
+        bgr_img, img = image_queue.get()
+        if bgr_img is None:
             break
 
         try:
             rep = DeepFace.represent(
                 align=True,
-                img_path=rgb_img,
+                img_path=bgr_img,
                 model_name="ArcFace",
                 enforce_detection=False,
                 detector_backend="retinaface",
