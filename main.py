@@ -46,7 +46,10 @@ def target_emb_master(main_path: str) -> list:
                     target_embeddings.append(np.array(rep[0]["embedding"]))  # type: ignore
 
             if len(target_embeddings) > 1:
-                master_target_embeddings.append(np.mean(target_embeddings, axis=0))
+                mean_embeddings = np.mean(target_embeddings, axis=0)
+                master_target_embeddings.append(
+                    mean_embeddings / np.linalg.norm(mean_embeddings)
+                )
             elif len(target_embeddings) == 1:
                 master_target_embeddings.append(target_embeddings[0])
 
@@ -108,11 +111,7 @@ def consumer_comparison(target_directory: str, result_queue: queue.Queue):
                 album_embedding = np.array(face["embedding"])  # type: ignore
 
                 for target_face_embedding in target_embeddings:
-                    cos_sin = np.dot(album_embedding, target_face_embedding) / (
-                        np.linalg.norm(album_embedding)
-                        * np.linalg.norm(target_face_embedding)
-                    )
-
+                    cos_sin = np.dot(album_embedding, target_face_embedding)
                     distance = 1 - cos_sin
                     if distance <= threshold:
                         is_match = True
