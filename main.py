@@ -4,7 +4,9 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
+import queue
 import shutil
+import threading
 from pathlib import Path
 
 import cv2
@@ -12,35 +14,16 @@ import numpy as np
 from deepface import DeepFace
 from dotenv import load_dotenv
 
-
-def target_emb(dir: str) -> list:  # dir is directory of target images
-    target_dir = Path(dir)
-    target_emb_list = []
-    for img in target_dir.iterdir():
-        if img.is_file():
-            img_array = cv2.imread(img)
-            if img_array is None:
-                continue
-            rgb_img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
-
-            rep = DeepFace.represent(
-                align=True,
-                img_path=rgb_img_array,
-                model_name="ArcFace",
-                enforce_detection=False,
-                detector_backend="retinaface",
-            )
-
-            target_emb_list.append(np.array(rep[0]["embedding"]))  # type: ignore
-    return target_emb_list
+image_queue = queue.Queue(maxsize=20)
+result_queue = queue.Queue()
 
 
-def target_emb_master(dir: str) -> list:
-    target_dir = Path(dir)
-    master_target_emd_list = []
-    for directory in target_dir.iterdir():
+def target_emb_master(main_path: str) -> list:
+    target_directory = Path(main_path)
+    master_target_embeddings = []
+    for directory in target_directory.iterdir():
         if directory.is_dir():
-            target_emb_list = []
+            target_embeddings = []
             for target_files in directory.iterdir():
                 if target_files.is_file() and target_files.suffix.lower() in {
                     ".jpg",
@@ -50,61 +33,69 @@ def target_emb_master(dir: str) -> list:
                     img_array = cv2.imread(target_files)
                     if img_array is None:
                         continue
-                    rgb_img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
 
                     rep = DeepFace.represent(
                         align=True,
-                        img_path=rgb_img_array,
+                        img_path=img_array,
                         model_name="ArcFace",
                         enforce_detection=False,
                         detector_backend="retinaface",
                     )
 
-                    target_emb_list.append(np.array(rep[0]["embedding"]))  # type: ignore
+                    target_embeddings.append(np.array(rep[0]["embedding"]))  # type: ignore
 
-            if len(target_emb_list) > 1:
-                master_target_emd_list.append(np.mean(target_emb_list, axis=0))
-            elif len(target_emb_list) == 1:
-                master_target_emd_list.append(target_emb_list[0])
+            if len(target_embeddings) > 1:
+                master_target_embeddings.append(np.mean(target_embeddings, axis=0))
+            elif len(target_embeddings) == 1:
+                master_target_embeddings.append(target_embeddings[0])
 
-    return master_target_emd_list
+    return master_target_embeddings
 
 
-def load_img(dir: str) -> list:
-    img_dir = Path(dir)
-    valid_img = [
+def load_image(main_path: str) -> list:
+    image_directory = Path(main_path)
+    valid_image = [
         p
-        for p in img_dir.iterdir()
+        for p in image_directory.iterdir()
         if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
     ]
-    return valid_img
+    return valid_image
 
 
-def makecopy(matched_images: list):
-    matches_dir = Path("matches")
-    matches_dir.mkdir(exist_ok=True)
-    for img in matched_images:
-        destination = matches_dir / img.name
-        shutil.copy(img, destination)
+def make_copy(matched_images: queue.Queue):
+    matches_directory = Path("matches")
+    matches_directory.mkdir(exist_ok=True)
+    while not matched_images.empty():
+        image_path = matched_images.get()
+        destination = matches_directory / image_path.name
+        shutil.copy(image_path, destination)
 
 
-def comparison(target_dir: str, img_dir: str) -> list:
-    valid_img = load_img(img_dir)
-    target_embbeddings = target_emb_master(target_dir)
+def producer_comparison(img_directory: str):
+    valid_image_path = load_image(img_directory)
+
+    for image_path in valid_image_path:
+        bgr_image_array = cv2.imread(image_path)
+        if bgr_image_array is None:
+            continue
+        image_queue.put((bgr_image_array, image_path))
+    image_queue.put((None, None))
+
+
+def consumer_comparison(target_directory: str, result_queue: queue.Queue):
+    target_embeddings = target_emb_master(target_directory)
 
     threshold = 0.50
-    matched_photos = []
 
-    for img in valid_img:
-        bgr_img = cv2.imread(img)
-        if bgr_img is None:
-            continue
-        rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
+    while True:
+        bgr_image_array, image_path = image_queue.get()
+        if bgr_image_array is None:
+            break
 
         try:
             rep = DeepFace.represent(
                 align=True,
-                img_path=rgb_img,
+                img_path=bgr_image_array,
                 model_name="ArcFace",
                 enforce_detection=False,
                 detector_backend="retinaface",
@@ -112,40 +103,53 @@ def comparison(target_dir: str, img_dir: str) -> list:
 
             is_match = False
             for face in rep:
-                album_emb = np.array(face["embedding"])  # type: ignore
+                album_embedding = np.array(face["embedding"])  # type: ignore
 
-                for target_face_emb in target_embbeddings:
-                    cos_sin = np.dot(album_emb, target_face_emb) / (
-                        np.linalg.norm(album_emb) * np.linalg.norm(target_face_emb)
+                for target_face_embedding in target_embeddings:
+                    cos_sin = np.dot(album_embedding, target_face_embedding) / (
+                        np.linalg.norm(album_embedding)
+                        * np.linalg.norm(target_face_embedding)
                     )
 
-                    distace = 1 - cos_sin
-                    if distace <= threshold:
+                    distance = 1 - cos_sin
+                    if distance <= threshold:
                         is_match = True
                         break
                 if is_match:
                     break
             if is_match:
-                matched_photos.append(img)
-                print(f"Match Found: {img.name}")
+                result_queue.put(image_path)
+                print(f"Match Found: {image_path.name}")
         except Exception as e:
-            print(f"Error processing {img.name}: {e}")
-    return matched_photos
+            print(f"Error processing {image_path.name}: {e}")
 
 
 if __name__ == "__main__":
     load_dotenv()
 
-    target_dir_path = os.getenv("TARGET_DIR")
-    album_dir_path = os.getenv("IMG_DIR")
+    target_directory_path = os.getenv("TARGET_DIR")
+    album_directory_path = os.getenv("IMG_DIR")
 
-    print("Starting face matching pipeline")
-    final_matches = comparison(target_dir_path, album_dir_path)
-    print(f"Scaning complete! Found {len(final_matches)} matches")
+    producer = threading.Thread(
+        target=producer_comparison, args=(album_directory_path,)
+    )
+    consumer = threading.Thread(
+        target=consumer_comparison, args=(target_directory_path, result_queue)
+    )
 
-    if final_matches:
+    print("Starting the face matching pipeline")
+
+    producer.start()
+    consumer.start()
+
+    producer.join()
+    consumer.join()
+
+    print(f"Scaning complete! Found {result_queue.qsize()} matches")
+
+    if not result_queue.empty():
         print("Creating copies to matches directory")
-        makecopy(final_matches)
+        make_copy(result_queue)
         print("Done")
     else:
         print("Final Matches was empty")
