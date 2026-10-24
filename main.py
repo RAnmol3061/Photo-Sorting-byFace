@@ -82,7 +82,7 @@ def producer_comparison(img_dir: str):
     image_queue.put((None, None))
 
 
-def consumer_comparison(target_dir: str, results_queue: queue.Queue):
+def consumer_comparison(target_dir: str, result_queue: queue.Queue):
     target_embeddings = target_emb_master(target_dir)
 
     threshold = 0.50
@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
     print(f"Scaning complete! Found {result_queue.qsize()} matches")
 
-    if result_queue:
+    if not result_queue.empty():
         print("Creating copies to matches directory")
         makecopy(result_queue)
         print("Done")
