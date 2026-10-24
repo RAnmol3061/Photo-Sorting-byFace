@@ -40,6 +40,7 @@ def target_emb_master(main_path: str) -> list:
                         model_name="ArcFace",
                         enforce_detection=False,
                         detector_backend="retinaface",
+                        l2_normalize=True,
                     )
 
                     target_embeddings.append(np.array(rep[0]["embedding"]))  # type: ignore
@@ -99,6 +100,7 @@ def consumer_comparison(target_directory: str, result_queue: queue.Queue):
                 model_name="ArcFace",
                 enforce_detection=False,
                 detector_backend="retinaface",
+                l2_normalize=True,
             )
 
             is_match = False
@@ -145,7 +147,7 @@ if __name__ == "__main__":
     producer.join()
     consumer.join()
 
-    print(f"Scaning complete! Found {result_queue.qsize()} matches")
+    print(f"Scanning complete! Found {result_queue.qsize()} matches")
 
     if not result_queue.empty():
         print("Creating copies to matches directory")
