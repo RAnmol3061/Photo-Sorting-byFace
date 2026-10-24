@@ -147,53 +147,6 @@ def consumer_comparison(target_dir: str, results_queue: queue.Queue):
             print(f"Error processing {img.name}: {e}")
 
 
-def comparison(target_dir: str, img_dir: str) -> list:
-    valid_img = load_img(img_dir)
-    target_embbeddings = target_emb_master(target_dir)
-
-    threshold = 0.50
-    matched_photos = []
-
-    for img in valid_img:
-        bgr_img = cv2.imread(img)
-        if bgr_img is None:
-            continue
-        rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
-
-        try:
-            rep = DeepFace.represent(
-                align=True,
-                img_path=rgb_img,
-                model_name="ArcFace",
-                enforce_detection=False,
-                detector_backend="retinaface",
-            )
-
-            is_match = False
-            for face in rep:
-                album_emb = np.array(face["embedding"])  # type: ignore
-
-                for target_face_emb in target_embbeddings:
-                    cos_sin = np.dot(album_emb, target_face_emb) / (
-                        np.linalg.norm(album_emb) * np.linalg.norm(target_face_emb)
-                    )
-
-                    distace = 1 - cos_sin
-                    if distace <= threshold:
-                        is_match = True
-                        break
-                if is_match:
-                    break
-            if is_match:
-                matched_photos.append(img)
-                print(f"Match Found: {img.name}")
-        except Exception as e:
-            print(f"Error processing {img.name}: {e}")
-        finally:
-            image_queue.task_done()
-    return matched_photos
-
-
 if __name__ == "__main__":
     load_dotenv()
 
