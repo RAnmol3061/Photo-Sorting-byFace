@@ -18,27 +18,6 @@ image_queue = queue.Queue(maxsize=20)
 result_queue = queue.Queue()
 
 
-def target_emb(dir: str) -> list:  # dir is directory of target images
-    target_dir = Path(dir)
-    target_emb_list = []
-    for img in target_dir.iterdir():
-        if img.is_file():
-            img_array = cv2.imread(img)
-            if img_array is None:
-                continue
-
-            rep = DeepFace.represent(
-                align=True,
-                img_path=img_array,
-                model_name="ArcFace",
-                enforce_detection=False,
-                detector_backend="retinaface",
-            )
-
-            target_emb_list.append(np.array(rep[0]["embedding"]))  # type: ignore
-    return target_emb_list
-
-
 def target_emb_master(dir: str) -> list:
     target_dir = Path(dir)
     master_target_emd_list = []
