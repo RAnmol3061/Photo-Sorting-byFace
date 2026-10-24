@@ -14,9 +14,6 @@ import numpy as np
 from deepface import DeepFace
 from dotenv import load_dotenv
 
-image_queue = queue.Queue(maxsize=20)
-result_queue = queue.Queue()
-
 
 def target_emb_master(main_path: str) -> list:
     target_directory = Path(main_path)
@@ -75,19 +72,22 @@ def make_copy(matched_images: queue.Queue):
         shutil.copy(image_path, destination)
 
 
-def producer_comparison(img_directory: str):
-    valid_image_path = load_image(img_directory)
+def producer_comparison(img_directory: str, image_queue: queue.Queue):
+    try:
+        valid_image_path = load_image(img_directory)
 
-    for image_path in valid_image_path:
-        bgr_image_array = cv2.imread(image_path)
-        if bgr_image_array is None:
-            continue
-        image_queue.put((bgr_image_array, image_path))
-    image_queue.put((None, None))
+        for image_path in valid_image_path:
+            bgr_image_array = cv2.imread(image_path)
+            if bgr_image_array is None:
+                continue
+            image_queue.put((bgr_image_array, image_path))
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        image_queue.put((None, None))
 
 
-def consumer_comparison(target_directory: str, result_queue: queue.Queue):
-    target_embeddings = target_emb_master(target_directory)
+def consumer_comparison(target_embeddings: list, result_queue: queue.Queue):
 
     threshold = 0.50
 
@@ -128,14 +128,19 @@ def consumer_comparison(target_directory: str, result_queue: queue.Queue):
 if __name__ == "__main__":
     load_dotenv()
 
+    image_queue = queue.Queue(maxsize=20)
+    result_queue = queue.Queue()
+
     target_directory_path = os.getenv("TARGET_DIR")
     album_directory_path = os.getenv("IMG_DIR")
 
+    target_embeddings = target_emb_master(target_directory_path)
+
     producer = threading.Thread(
-        target=producer_comparison, args=(album_directory_path,)
+        target=producer_comparison, args=(album_directory_path, image_queue)
     )
     consumer = threading.Thread(
-        target=consumer_comparison, args=(target_directory_path, result_queue)
+        target=consumer_comparison, args=(target_embeddings, result_queue)
     )
 
     print("Starting the face matching pipeline")
