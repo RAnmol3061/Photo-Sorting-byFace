@@ -85,10 +85,11 @@ def load_img(dir: str) -> list:
     return valid_img
 
 
-def makecopy(matched_images: list):
+def makecopy(matched_images: queue.Queue):
     matches_dir = Path("matches")
     matches_dir.mkdir(exist_ok=True)
-    for img in matched_images:
+    while not matched_images.empty():
+        img = matched_images.get()
         destination = matches_dir / img.name
         shutil.copy(img, destination)
 
@@ -102,7 +103,7 @@ def producer_comparison(img_dir: str):
             continue
         rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
         image_queue.put((rgb_img, img))
-    image_queue.put(None)
+    image_queue.put((None, None))
 
 
 def consumer_comparison(target_dir: str, results_queue: queue.Queue):
@@ -206,11 +207,17 @@ if __name__ == "__main__":
 
     print("Starting the face matching pipeline")
 
+    producer.start()
+    consumer.start()
+
+    producer.join()
+    consumer.join()
+
     print(f"Scaning complete! Found {result_queue.qsize()} matches")
 
     if result_queue:
         print("Creating copies to matches directory")
-        makecopy(final_matches)
+        makecopy(result_queue)
         print("Done")
     else:
         print("Final Matches was empty")
