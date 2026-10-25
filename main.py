@@ -15,7 +15,7 @@ from deepface import DeepFace
 from dotenv import load_dotenv
 
 
-def target_emb_master(main_path: str) -> list:
+def target_emb_master(main_path: str) -> list[float]:
     target_directory = Path(main_path)
     master_target_embeddings = []
     for directory in target_directory.iterdir():
@@ -53,7 +53,7 @@ def target_emb_master(main_path: str) -> list:
     return master_target_embeddings
 
 
-def load_image(main_path: str) -> list:
+def load_image(main_path: str) -> list[Path]:
     image_directory = Path(main_path)
     valid_image = [
         p
@@ -63,7 +63,7 @@ def load_image(main_path: str) -> list:
     return valid_image
 
 
-def make_copy(matched_images: queue.Queue):
+def make_copy(matched_images: queue.Queue[Path]) -> None:
     matches_directory = Path("matches")
     matches_directory.mkdir(exist_ok=True)
     while not matched_images.empty():
@@ -72,7 +72,7 @@ def make_copy(matched_images: queue.Queue):
         shutil.copy(image_path, destination)
 
 
-def producer_comparison(img_directory: str, image_queue: queue.Queue):
+def producer_comparison(img_directory: str, image_queue: queue.Queue[tuple]) -> None:
     try:
         valid_image_path = load_image(img_directory)
 
@@ -87,7 +87,11 @@ def producer_comparison(img_directory: str, image_queue: queue.Queue):
         image_queue.put((None, None))
 
 
-def consumer_comparison(target_embeddings: list, result_queue: queue.Queue):
+def consumer_comparison(
+    target_embeddings: list,
+    result_queue: queue.Queue[Path],
+    image_queue: queue.Queue[tuple],
+) -> None:
 
     threshold = 0.50
 
@@ -111,8 +115,8 @@ def consumer_comparison(target_embeddings: list, result_queue: queue.Queue):
                 album_embedding = np.array(face["embedding"])  # type: ignore
 
                 for target_face_embedding in target_embeddings:
-                    cos_sin = np.dot(album_embedding, target_face_embedding)
-                    distance = 1 - cos_sin
+                    cos_sim = np.dot(album_embedding, target_face_embedding)
+                    distance = 1 - cos_sim
                     if distance <= threshold:
                         is_match = True
                         break
@@ -134,13 +138,16 @@ if __name__ == "__main__":
     target_directory_path = os.getenv("TARGET_DIR")
     album_directory_path = os.getenv("IMG_DIR")
 
+    if not target_directory_path or not album_directory_path:
+        raise ValueError("Check your .env file for TARGET_DIR & IMG_DIR paths")
+
     target_embeddings = target_emb_master(target_directory_path)
 
     producer = threading.Thread(
         target=producer_comparison, args=(album_directory_path, image_queue)
     )
     consumer = threading.Thread(
-        target=consumer_comparison, args=(target_embeddings, result_queue)
+        target=consumer_comparison, args=(target_embeddings, result_queue, image_queue)
     )
 
     print("Starting the face matching pipeline")
