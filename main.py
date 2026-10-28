@@ -4,8 +4,10 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
+import argparse
 import queue
 import shutil
+import sys
 import threading
 from pathlib import Path
 
@@ -91,9 +93,10 @@ def consumer_comparison(
     target_embeddings: list,
     result_queue: queue.Queue[Path],
     image_queue: queue.Queue[tuple],
+    threshold: float,
 ) -> None:
 
-    threshold = 0.50
+    threshold = threshold
 
     while True:
         bgr_image_array, image_path = image_queue.get()
@@ -141,13 +144,43 @@ if __name__ == "__main__":
     if not target_directory_path or not album_directory_path:
         raise ValueError("Check your .env file for TARGET_DIR & IMG_DIR paths")
 
-    target_embeddings = target_emb_master(target_directory_path)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--target",
+        type=Path,
+        default=target_directory_path,
+        help="Directory of Target Images",
+    )
+    parser.add_argument(
+        "--album",
+        type=Path,
+        default=album_directory_path,
+        help="Directory of images to scan through",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.50,
+        help="Threshold value for confidence",
+    )
+
+    args = parser.parse_args()
+    try:
+        args_custom = [
+            args.target.resolve(strict=True),
+            args.album.resolve(strict=True),
+        ]
+    except FileNotFoundError:
+        sys.exit("Error: Your path is incorrect, please check both of them")
+
+    target_embeddings = target_emb_master(args_custom[0])
 
     producer = threading.Thread(
-        target=producer_comparison, args=(album_directory_path, image_queue)
+        target=producer_comparison, args=(args_custom[1], image_queue)
     )
     consumer = threading.Thread(
-        target=consumer_comparison, args=(target_embeddings, result_queue, image_queue)
+        target=consumer_comparison,
+        args=(target_embeddings, result_queue, image_queue, args.threshold),
     )
 
     print("Starting the face matching pipeline")
