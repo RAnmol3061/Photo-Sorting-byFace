@@ -132,7 +132,7 @@ def consumer_comparison(
             print(f"Error processing {image_path.name}: {e}")
 
 
-if __name__ == "__main__":
+def main() -> None:
     load_dotenv()
 
     image_queue = queue.Queue(maxsize=20)
@@ -199,3 +199,7 @@ if __name__ == "__main__":
         print("Done")
     else:
         print("Final Matches was empty")
+
+
+if __name__ == "__main__":
+    main()
