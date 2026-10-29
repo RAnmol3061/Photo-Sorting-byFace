@@ -6,18 +6,19 @@ import sys
 import threading
 from pathlib import Path
 
+import numpy as np
+from dotenv import load_dotenv
+
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import cv2
-import numpy as np
 from deepface import DeepFace
-from dotenv import load_dotenv
 
 
-def target_emb_master(main_path: Path) -> list[float]:
-    target_directory = Path(main_path)
+def target_emb_master(main_path: Path) -> list[np.ndarray]:
+    target_directory = main_path
     master_target_embeddings = []
     for directory in target_directory.iterdir():
         if directory.is_dir():
@@ -54,8 +55,8 @@ def target_emb_master(main_path: Path) -> list[float]:
     return master_target_embeddings
 
 
-def load_image(main_path: str) -> list[Path]:
-    image_directory = Path(main_path)
+def load_image(main_path: Path) -> list[Path]:
+    image_directory = main_path
     valid_image = [
         p
         for p in image_directory.iterdir()
@@ -73,7 +74,7 @@ def make_copy(matched_images: queue.Queue[Path]) -> None:
         shutil.copy(image_path, destination)
 
 
-def producer_comparison(img_directory: str, image_queue: queue.Queue[tuple]) -> None:
+def producer_comparison(img_directory: Path, image_queue: queue.Queue[tuple]) -> None:
     try:
         valid_image_path = load_image(img_directory)
 
