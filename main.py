@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import queue
 import shutil
@@ -31,6 +32,10 @@ def target_emb_master(main_path: Path) -> list[np.ndarray]:
                 }:
                     img_array = cv2.imread(target_files)
                     if img_array is None:
+                        logging.warning(
+                            "Target File %s was unable to be read by imread",
+                            target_files,
+                        )
                         continue
 
                     rep = DeepFace.represent(
@@ -81,10 +86,13 @@ def producer_comparison(img_directory: Path, image_queue: queue.Queue[tuple]) ->
         for image_path in valid_image_path:
             bgr_image_array = cv2.imread(image_path)
             if bgr_image_array is None:
+                logging.warning(
+                    "Album File %s was unable to be read by imread", image_path
+                )
                 continue
             image_queue.put((bgr_image_array, image_path))
-    except Exception as e:
-        print(f"Error: {e}")
+    except Exception:
+        logging.exception("Something went wrong in producer_comparison thread")
     finally:
         image_queue.put((None, None))
 
@@ -126,7 +134,9 @@ def consumer_comparison(
             if is_match:
                 result_queue.put(image_path)
                 print(f"Match Found: {image_path.name}")
+                logging.debug(f"Match Found: {image_path.name}")
         except Exception as e:
+            logging.error("Some error in consumer comparison thread.")
             print(f"Error processing {image_path.name}: {e}")
 
 
@@ -147,6 +157,14 @@ def validate_cli_dir(cli_flag_value: Path | None, default_value: str | None) -> 
 
 
 def main() -> int:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        filename="script.log",
+        filemode="w",
+    )
+
     load_dotenv()
 
     image_queue = queue.Queue(maxsize=20)
