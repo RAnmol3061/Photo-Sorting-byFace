@@ -56,7 +56,11 @@ def target_emb_master(main_path: Path) -> list[np.ndarray]:
                 )
             elif len(target_embeddings) == 1:
                 master_target_embeddings.append(target_embeddings[0])
-
+    if not master_target_embeddings:
+        logging.critical(
+            "Master_target_embedding list is empty. Incorrect target directory structure"
+        )
+        sys.exit(1)
     return master_target_embeddings
 
 
