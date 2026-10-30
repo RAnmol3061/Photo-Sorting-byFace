@@ -145,13 +145,16 @@ def validate_cli_dir(cli_flag_value: Path | None, default_value: str | None) -> 
         try:
             return cli_flag_value.resolve(strict=True)
         except FileNotFoundError:
-            print("Invalid CLI Argument")
+            logging.warning("Invalid CLI Argument, moving to default values(env)")
+            print("Invalid CLI Argument, moving to default values(env)")
     if default_value is not None:
         try:
             return Path(default_value).resolve(strict=True)
         except FileNotFoundError:
+            logging.critical("Invalid Default value in .env file. Exiting")
             print("Invalid Default value. Exiting")
             sys.exit(1)
+    logging.critical("Exiting: Due to no cli & default arguments")
     print("Error: No cli argument and empty default. Exiting")
     sys.exit(1)
 
@@ -173,20 +176,15 @@ def main() -> int:
     target_directory_path = os.getenv("TARGET_DIR", default=None)
     album_directory_path = os.getenv("IMG_DIR", default=None)
 
-    # if not target_directory_path or not album_directory_path:
-    # raise ValueError("Check your .env file for TARGET_DIR & IMG_DIR paths")
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--target",
         type=Path,
-        # default=target_directory_path,
         help="Directory of Target Images",
     )
     parser.add_argument(
         "--album",
         type=Path,
-        # default=album_directory_path,
         help="Directory of images to scan through",
     )
     parser.add_argument(
@@ -212,6 +210,7 @@ def main() -> int:
         args=(target_embeddings, result_queue, image_queue, args.threshold),
     )
 
+    logging.debug("Pipeline starts now")
     print("Starting the face matching pipeline")
 
     producer.start()
