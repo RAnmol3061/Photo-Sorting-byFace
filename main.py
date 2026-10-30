@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import queue
 import shutil
@@ -31,6 +32,10 @@ def target_emb_master(main_path: Path) -> list[np.ndarray]:
                 }:
                     img_array = cv2.imread(target_files)
                     if img_array is None:
+                        logging.warning(
+                            "Target File %s was unable to be read by imread",
+                            target_files,
+                        )
                         continue
 
                     rep = DeepFace.represent(
@@ -81,10 +86,13 @@ def producer_comparison(img_directory: Path, image_queue: queue.Queue[tuple]) ->
         for image_path in valid_image_path:
             bgr_image_array = cv2.imread(image_path)
             if bgr_image_array is None:
+                logging.warning(
+                    "Album File %s was unable to be read by imread", image_path
+                )
                 continue
             image_queue.put((bgr_image_array, image_path))
-    except Exception as e:
-        print(f"Error: {e}")
+    except Exception:
+        logging.exception("Something went wrong in producer_comparison thread")
     finally:
         image_queue.put((None, None))
 
@@ -126,7 +134,9 @@ def consumer_comparison(
             if is_match:
                 result_queue.put(image_path)
                 print(f"Match Found: {image_path.name}")
+                logging.debug(f"Match Found: {image_path.name}")
         except Exception as e:
+            logging.error("Some error in consumer comparison thread.")
             print(f"Error processing {image_path.name}: {e}")
 
 
@@ -135,18 +145,29 @@ def validate_cli_dir(cli_flag_value: Path | None, default_value: str | None) -> 
         try:
             return cli_flag_value.resolve(strict=True)
         except FileNotFoundError:
-            print("Invalid CLI Argument")
+            logging.warning("Invalid CLI Argument, moving to default values(env)")
+            print("Invalid CLI Argument, moving to default values(env)")
     if default_value is not None:
         try:
             return Path(default_value).resolve(strict=True)
         except FileNotFoundError:
+            logging.critical("Invalid Default value in .env file. Exiting")
             print("Invalid Default value. Exiting")
             sys.exit(1)
+    logging.critical("Exiting: Due to no cli & default arguments")
     print("Error: No cli argument and empty default. Exiting")
     sys.exit(1)
 
 
 def main() -> int:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        filename="script.log",
+        filemode="w",
+    )
+
     load_dotenv()
 
     image_queue = queue.Queue(maxsize=20)
@@ -155,20 +176,15 @@ def main() -> int:
     target_directory_path = os.getenv("TARGET_DIR", default=None)
     album_directory_path = os.getenv("IMG_DIR", default=None)
 
-    # if not target_directory_path or not album_directory_path:
-    # raise ValueError("Check your .env file for TARGET_DIR & IMG_DIR paths")
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--target",
         type=Path,
-        # default=target_directory_path,
         help="Directory of Target Images",
     )
     parser.add_argument(
         "--album",
         type=Path,
-        # default=album_directory_path,
         help="Directory of images to scan through",
     )
     parser.add_argument(
@@ -194,6 +210,7 @@ def main() -> int:
         args=(target_embeddings, result_queue, image_queue, args.threshold),
     )
 
+    logging.debug("Pipeline starts now")
     print("Starting the face matching pipeline")
 
     producer.start()
