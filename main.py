@@ -65,6 +65,15 @@ def target_emb_master(main_path: Path) -> list[np.ndarray]:
 
 
 def load_image(main_path: Path) -> list[Path]:
+    """Loads the album images and returns list of Path
+
+    Argument must be a path object, otherwise function will throw a uncaught exception
+
+    Args:
+        main_path (Path): Path object containing the directory of album files
+    Returns:
+        list[Path]: A list containing path objects of .jpg, .jpeg, .png types"""
+
     image_directory = main_path
     valid_image = [
         p
