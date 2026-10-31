@@ -14,8 +14,8 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-import cv2
-from deepface import DeepFace
+import cv2  # pylint: disable=wrong-import-position
+from deepface import DeepFace  # pylint: disable=wrong-import-position
 
 
 def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
