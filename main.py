@@ -23,12 +23,11 @@ def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
 
     if use_cache:
         for file in target_directory.iterdir():
-            if file.is_file() and file.suffix.lower() in {"npy"}:
+            if file.is_file() and file.suffix.lower() in {".npy"}:
                 master_target_embeddings = np.load(file=file, allow_pickle=False)
                 logging.debug("Loaded target_emb cache")
                 return master_target_embeddings
-            else:
-                logging.warning("No target_emb cache found. Calculating target_emb now")
+        logging.warning("No target_emb cache found. Calculating target_emb now")
 
     master_target_embeddings = []
     for directory in target_directory.iterdir():
@@ -71,7 +70,7 @@ def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
             "Master_target_embedding list is empty. Incorrect target directory structure"
         )
         sys.exit(1)
-    np.save(target_directory, master_target_embeddings)
+    np.save(target_directory / "master_emb.npy", master_target_embeddings)
     logging.debug("saved master_target_embedding to disk")
     return master_target_embeddings
 
