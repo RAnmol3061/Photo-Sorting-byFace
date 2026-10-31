@@ -135,6 +135,7 @@ def consumer_comparison(
 
     total_images = total_no_queues.get()
     with tqdm(total=total_images, desc="GPU Inference", unit="img") as pbar:
+        target_matrix = np.asarray(target_embeddings)
         while True:
             bgr_image_array, image_path = image_queue.get()
             if bgr_image_array is None:
@@ -156,7 +157,6 @@ def consumer_comparison(
                 is_match = False
                 for face in rep:
                     album_embedding = np.array(face["embedding"])  # type: ignore
-                    target_matrix = np.asarray(target_embeddings)
                     cos_sim_matrix = album_embedding @ target_matrix.T
                     distances = 1.0 - cos_sim_matrix
                     is_match = bool(np.any(distances <= threshold))
