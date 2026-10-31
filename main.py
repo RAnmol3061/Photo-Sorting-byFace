@@ -217,10 +217,12 @@ def main() -> int:
     producer = threading.Thread(
         target=producer_comparison,
         args=(args_album, image_queue),
+        daemon=True,
     )
     consumer = threading.Thread(
         target=consumer_comparison,
         args=(target_embeddings, result_queue, image_queue, args.threshold),
+        daemon=True,
     )
 
     logging.debug("Pipeline starts now")
