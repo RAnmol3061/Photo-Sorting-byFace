@@ -146,13 +146,11 @@ def consumer_comparison(
             is_match = False
             for face in rep:
                 album_embedding = np.array(face["embedding"])  # type: ignore
+                target_matrix = np.asarray(target_embeddings)
+                cos_sim_matrix = album_embedding @ target_matrix.T
+                distances = 1.0 - cos_sim_matrix
+                is_match = bool(np.any(distances <= threshold))
 
-                for target_face_embedding in target_embeddings:
-                    cos_sim = np.dot(album_embedding, target_face_embedding)
-                    distance = 1 - cos_sim
-                    if distance <= threshold:
-                        is_match = True
-                        break
                 if is_match:
                     break
             if is_match:
