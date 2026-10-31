@@ -18,8 +18,18 @@ import cv2
 from deepface import DeepFace
 
 
-def target_emb_master(main_path: Path) -> list[np.ndarray]:
+def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
     target_directory = main_path
+
+    if use_cache:
+        for file in target_directory.iterdir():
+            if file.is_file() and file.suffix.lower() in {"npy"}:
+                master_target_embeddings = np.load(file=file, allow_pickle=False)
+                logging.debug("Loaded target_emb cache")
+                return master_target_embeddings
+            else:
+                logging.warning("No target_emb cache found. Calculating target_emb now")
+
     master_target_embeddings = []
     for directory in target_directory.iterdir():
         if directory.is_dir():
@@ -208,13 +218,19 @@ def main() -> int:
         default=0.50,
         help="Threshold value for confidence",
     )
+    parser.add_argument(
+        "--cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable or disable use of cached target embeddings",
+    )
 
     args = parser.parse_args()
 
     args_target = validate_cli_dir(args.target, target_directory_path)
     args_album = validate_cli_dir(args.album, album_directory_path)
 
-    target_embeddings = target_emb_master(args_target)
+    target_embeddings = target_emb_master(args_target, args.cache)
 
     producer = threading.Thread(
         target=producer_comparison,
