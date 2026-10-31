@@ -61,6 +61,8 @@ def target_emb_master(main_path: Path) -> list[np.ndarray]:
             "Master_target_embedding list is empty. Incorrect target directory structure"
         )
         sys.exit(1)
+    np.save(target_directory, master_target_embeddings)
+    logging.debug("saved master_target_embedding to disk")
     return master_target_embeddings
 
 
