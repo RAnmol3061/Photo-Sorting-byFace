@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
@@ -103,9 +104,12 @@ def make_copy(matched_images: queue.Queue[Path]) -> None:
         shutil.copy(image_path, destination)
 
 
-def producer_comparison(img_directory: Path, image_queue: queue.Queue[tuple]) -> None:
+def producer_comparison(
+    img_directory: Path, image_queue: queue.Queue[tuple], total_no_images: queue.Queue
+) -> None:
     try:
         valid_image_path = load_image(img_directory)
+        total_no_images.put(len(valid_image_path))
 
         for image_path in valid_image_path:
             bgr_image_array = cv2.imread(image_path)
@@ -126,40 +130,47 @@ def consumer_comparison(
     result_queue: queue.Queue[Path],
     image_queue: queue.Queue[tuple],
     threshold: float,
+    total_no_queues: queue.Queue,
 ) -> None:
 
-    while True:
-        bgr_image_array, image_path = image_queue.get()
-        if bgr_image_array is None:
-            break
+    total_images = total_no_queues.get()
+    with tqdm(total=total_images, desc="GPU Inference", unit="img") as pbar:
+        while True:
+            bgr_image_array, image_path = image_queue.get()
+            if bgr_image_array is None:
+                break
 
-        try:
-            rep = DeepFace.represent(
-                align=True,
-                img_path=bgr_image_array,
-                model_name="ArcFace",
-                enforce_detection=False,
-                detector_backend="retinaface",
-                l2_normalize=True,
-            )
+            try:
+                rep = DeepFace.represent(
+                    align=True,
+                    img_path=bgr_image_array,
+                    model_name="ArcFace",
+                    enforce_detection=False,
+                    detector_backend="retinaface",
+                    l2_normalize=True,
+                )
 
-            is_match = False
-            for face in rep:
-                album_embedding = np.array(face["embedding"])  # type: ignore
-                target_matrix = np.asarray(target_embeddings)
-                cos_sim_matrix = album_embedding @ target_matrix.T
-                distances = 1.0 - cos_sim_matrix
-                is_match = bool(np.any(distances <= threshold))
+                pbar.update(1)
+                pbar.set_postfix(qsize=image_queue.qsize(), refresh=False)
 
+                is_match = False
+                for face in rep:
+                    album_embedding = np.array(face["embedding"])  # type: ignore
+                    target_matrix = np.asarray(target_embeddings)
+                    cos_sim_matrix = album_embedding @ target_matrix.T
+                    distances = 1.0 - cos_sim_matrix
+                    is_match = bool(np.any(distances <= threshold))
+
+                    if is_match:
+                        break
                 if is_match:
-                    break
-            if is_match:
-                result_queue.put(image_path)
-                print(f"Match Found: {image_path.name}")
-                logging.debug(f"Match Found: {image_path.name}")
-        except Exception as e:
-            logging.error("Some error in consumer comparison thread.")
-            print(f"Error processing {image_path.name}: {e}")
+                    result_queue.put(image_path)
+                    logging.debug("Match Found: %s", image_path.name)
+            except Exception:
+                logging.error("Some error in consumer comparison thread.")
+                logging.warning(
+                    "Probably something wrong with image: %s", image_path.name
+                )
 
 
 def validate_cli_dir(cli_flag_value: Path | None, default_value: str | None) -> Path:
@@ -190,10 +201,12 @@ def main() -> int:
         filemode="w",
     )
 
+    logging.debug("Program started")
     load_dotenv()
 
     image_queue = queue.Queue(maxsize=20)
     result_queue = queue.Queue()
+    total_no_images = queue.Queue()
 
     target_directory_path = os.getenv("TARGET_DIR", default=None)
     album_directory_path = os.getenv("IMG_DIR", default=None)
@@ -231,12 +244,18 @@ def main() -> int:
 
     producer = threading.Thread(
         target=producer_comparison,
-        args=(args_album, image_queue),
+        args=(args_album, image_queue, total_no_images),
         daemon=True,
     )
     consumer = threading.Thread(
         target=consumer_comparison,
-        args=(target_embeddings, result_queue, image_queue, args.threshold),
+        args=(
+            target_embeddings,
+            result_queue,
+            image_queue,
+            args.threshold,
+            total_no_images,
+        ),
         daemon=True,
     )
 
