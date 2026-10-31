@@ -14,12 +14,21 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-import cv2
-from deepface import DeepFace
+import cv2  # pylint: disable=wrong-import-position
+from deepface import DeepFace  # pylint: disable=wrong-import-position
 
 
-def target_emb_master(main_path: Path) -> list[np.ndarray]:
+def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
     target_directory = main_path
+
+    if use_cache:
+        for file in target_directory.iterdir():
+            if file.is_file() and file.suffix.lower() in {".npy"}:
+                master_target_embeddings = np.load(file=file, allow_pickle=False)
+                logging.debug("Loaded target_emb cache")
+                return master_target_embeddings
+        logging.warning("No target_emb cache found. Calculating target_emb now")
+
     master_target_embeddings = []
     for directory in target_directory.iterdir():
         if directory.is_dir():
@@ -61,6 +70,8 @@ def target_emb_master(main_path: Path) -> list[np.ndarray]:
             "Master_target_embedding list is empty. Incorrect target directory structure"
         )
         sys.exit(1)
+    np.save(target_directory / "master_emb.npy", master_target_embeddings)
+    logging.debug("saved master_target_embedding to disk")
     return master_target_embeddings
 
 
@@ -206,13 +217,19 @@ def main() -> int:
         default=0.50,
         help="Threshold value for confidence",
     )
+    parser.add_argument(
+        "--cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable or disable use of cached target embeddings",
+    )
 
     args = parser.parse_args()
 
     args_target = validate_cli_dir(args.target, target_directory_path)
     args_album = validate_cli_dir(args.album, album_directory_path)
 
-    target_embeddings = target_emb_master(args_target)
+    target_embeddings = target_emb_master(args_target, args.cache)
 
     producer = threading.Thread(
         target=producer_comparison,
