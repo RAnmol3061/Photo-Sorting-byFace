@@ -2,6 +2,8 @@ import logging
 import sys
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 
 def validate_cli_dir(cli_flag_value: Path | None, default_value: str | None) -> Path:
     """Resolve and validate
@@ -23,15 +25,15 @@ def validate_cli_dir(cli_flag_value: Path | None, default_value: str | None) -> 
         try:
             return cli_flag_value.resolve(strict=True)
         except FileNotFoundError:
-            logging.warning("Invalid CLI Argument, moving to default values(env)")
+            logger.warning("Invalid CLI Argument, moving to default values(env)")
             print("Invalid CLI Argument, moving to default values(env)")
     if default_value is not None:
         try:
             return Path(default_value).resolve(strict=True)
         except FileNotFoundError:
-            logging.critical("Invalid Default value in .env file. Exiting")
+            logger.critical("Invalid Default value in .env file. Exiting")
             print("Invalid Default value. Exiting")
             sys.exit(1)
-    logging.critical("Exiting: Due to no cli & default arguments")
+    logger.critical("Exiting: Due to no cli & default arguments")
     print("Error: No cli argument and empty default. Exiting")
     sys.exit(1)

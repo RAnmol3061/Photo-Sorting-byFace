@@ -12,6 +12,8 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import cv2  # pylint: disable=wrong-import-position
 from deepface import DeepFace  # pylint: disable=wrong-import-position
 
+logger = logging.getLogger(__name__)
+
 
 def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
     target_directory = main_path
@@ -20,9 +22,9 @@ def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
         for file in target_directory.iterdir():
             if file.is_file() and file.suffix.lower() in {".npy"}:
                 master_target_embeddings = np.load(file=file, allow_pickle=False)
-                logging.debug("Loaded target_emb cache")
+                logger.debug("Loaded target_emb cache")
                 return master_target_embeddings
-        logging.warning("No target_emb cache found. Calculating target_emb now")
+        logger.warning("No target_emb cache found. Calculating target_emb now")
 
     master_target_embeddings = []
     for directory in target_directory.iterdir():
@@ -36,7 +38,7 @@ def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
                 }:
                     img_array = cv2.imread(target_files)
                     if img_array is None:
-                        logging.warning(
+                        logger.warning(
                             "Target File %s was unable to be read by imread",
                             target_files,
                         )
@@ -61,12 +63,12 @@ def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
             elif len(target_embeddings) == 1:
                 master_target_embeddings.append(target_embeddings[0])
     if not master_target_embeddings:
-        logging.critical(
+        logger.critical(
             "Master_target_embedding list is empty. Incorrect target directory structure"
         )
         sys.exit(1)
     np.save(target_directory / "master_emb.npy", master_target_embeddings)
-    logging.debug("saved master_target_embedding to disk")
+    logger.debug("saved master_target_embedding to disk")
     return master_target_embeddings
 
 

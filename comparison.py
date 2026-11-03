@@ -9,6 +9,8 @@ from tqdm import tqdm
 
 from my_preprocess import load_image
 
+logger = logging.getLogger(__name__)
+
 
 def producer_comparison(
     img_directory: Path, image_queue: queue.Queue[tuple], total_no_images: queue.Queue
@@ -20,13 +22,13 @@ def producer_comparison(
         for image_path in valid_image_path:
             bgr_image_array = cv2.imread(image_path)
             if bgr_image_array is None:
-                logging.warning(
+                logger.warning(
                     "Album File %s was unable to be read by imread", image_path
                 )
                 continue
             image_queue.put((bgr_image_array, image_path))
     except Exception:
-        logging.exception("Something went wrong in producer_comparison thread")
+        logger.exception("Something went wrong in producer_comparison thread")
     finally:
         image_queue.put((None, None))
 
@@ -71,9 +73,9 @@ def consumer_comparison(
                         break
                 if is_match:
                     result_queue.put(image_path)
-                    logging.debug("Match Found: %s", image_path.name)
+                    logger.debug("Match Found: %s", image_path.name)
             except Exception:
-                logging.error("Some error in consumer comparison thread.")
-                logging.warning(
+                logger.error("Some error in consumer comparison thread.")
+                logger.warning(
                     "Probably something wrong with image: %s", image_path.name
                 )

@@ -23,7 +23,8 @@ def main() -> int:
         filemode="w",
     )
 
-    logging.debug("Program started")
+    logger = logging.getLogger(__name__)
+    logger.debug("Program started")
     load_dotenv()
 
     image_queue = queue.Queue(maxsize=20)
@@ -81,7 +82,7 @@ def main() -> int:
         daemon=True,
     )
 
-    logging.debug("Pipeline starts now")
+    logger.debug("Pipeline starts now")
     print("Starting the face matching pipeline")
 
     producer.start()
