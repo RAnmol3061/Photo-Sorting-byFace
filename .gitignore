@@ -3,3 +3,4 @@ matches/
 *.log
 .venv/
 Data/
+__pycache__
