@@ -63,6 +63,13 @@ def main() -> int:
     args_target = validate_cli_dir(args.target, target_directory_path)
     args_album = validate_cli_dir(args.album, album_directory_path)
 
+    if args_target is not Path:
+        print("Value of args_target is not defined")
+        return 1
+    if args_album is not Path:
+        print("Value of args_album not defined")
+        return 1
+
     target_embeddings = target_emb_master(args_target, args.cache)
 
     producer = threading.Thread(
