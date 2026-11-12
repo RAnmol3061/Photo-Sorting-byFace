@@ -54,7 +54,7 @@ def main() -> int:
     parser.add_argument(
         "--cache",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Enable or disable use of cached target embeddings",
     )
 
