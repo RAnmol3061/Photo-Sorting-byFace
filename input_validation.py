@@ -7,20 +7,21 @@ logger = logging.getLogger(__name__)
 def validate_cli_dir(
     cli_flag_value: Path | None, default_value: str | None
 ) -> Path | bool:
-    """Resolve and validate
+    """Checks if provided args resolve, if not returns False.
 
-    Method is used to validate whether cli argument is resolves to real path. If not, then default value is
-    checked if resolves to real path. If both values do not resolve then exit from the program
+    Takes two values. If cli_flag_value does not resolve or not exist
+    falls back to default_value. If default value also does not resolve
+    or not exist (none) then finally returns False. Otherwise returns resolved
+    Path. Here resolved means path.resolve(strict=True)
 
     Args:
-        cli_flag_value (Path | None): Value provided as cli argument. If no cli argument provided, value becomes none
-        default_value (str | None): Value provided as default. If no default provided, value assigned none
+        cli_flag_value (Path | None): Value provided as cli argument.
+                                      If no cli argument provided, value -> none
 
+        default_value (str | None): Value provided as default. If
+                                    no default provided, value -> none
     Returns:
-        A resolved, existing
-
-    Raises:
-        FileNotFoundError: If provided cli arguments & default values don't resolv
+        A valid path object or false boolean
     """
     if cli_flag_value is not None:
         try:
