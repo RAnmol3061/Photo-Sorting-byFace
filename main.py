@@ -2,194 +2,16 @@ import argparse
 import logging
 import os
 import queue
-import shutil
 import sys
 import threading
 from pathlib import Path
 
-import numpy as np
 from dotenv import load_dotenv
-from tqdm import tqdm
 
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-
-import cv2  # pylint: disable=wrong-import-position
-from deepface import DeepFace  # pylint: disable=wrong-import-position
-
-
-def target_emb_master(main_path: Path, use_cache: bool) -> list[np.ndarray]:
-    target_directory = main_path
-
-    if use_cache:
-        for file in target_directory.iterdir():
-            if file.is_file() and file.suffix.lower() in {".npy"}:
-                master_target_embeddings = np.load(file=file, allow_pickle=False)
-                logging.debug("Loaded target_emb cache")
-                return master_target_embeddings
-        logging.warning("No target_emb cache found. Calculating target_emb now")
-
-    master_target_embeddings = []
-    for directory in target_directory.iterdir():
-        if directory.is_dir():
-            target_embeddings = []
-            for target_files in directory.iterdir():
-                if target_files.is_file() and target_files.suffix.lower() in {
-                    ".jpg",
-                    ".jpeg",
-                    ".png",
-                }:
-                    img_array = cv2.imread(target_files)
-                    if img_array is None:
-                        logging.warning(
-                            "Target File %s was unable to be read by imread",
-                            target_files,
-                        )
-                        continue
-
-                    rep = DeepFace.represent(
-                        align=True,
-                        img_path=img_array,
-                        model_name="ArcFace",
-                        enforce_detection=False,
-                        detector_backend="retinaface",
-                        l2_normalize=True,
-                    )
-
-                    target_embeddings.append(np.array(rep[0]["embedding"]))  # type: ignore
-
-            if len(target_embeddings) > 1:
-                mean_embeddings = np.mean(target_embeddings, axis=0)
-                master_target_embeddings.append(
-                    mean_embeddings / np.linalg.norm(mean_embeddings)
-                )
-            elif len(target_embeddings) == 1:
-                master_target_embeddings.append(target_embeddings[0])
-    if not master_target_embeddings:
-        logging.critical(
-            "Master_target_embedding list is empty. Incorrect target directory structure"
-        )
-        sys.exit(1)
-    np.save(target_directory / "master_emb.npy", master_target_embeddings)
-    logging.debug("saved master_target_embedding to disk")
-    return master_target_embeddings
-
-
-def load_image(main_path: Path) -> list[Path]:
-    """Loads the album images and returns list of Path
-
-    Argument must be a path object, otherwise function will throw a uncaught exception
-
-    Args:
-        main_path (Path): Path object containing the directory of album files
-    Returns:
-        list[Path]: A list containing path objects of .jpg, .jpeg, .png types"""
-
-    image_directory = main_path
-    valid_image = [
-        p
-        for p in image_directory.iterdir()
-        if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
-    ]
-    return valid_image
-
-
-def make_copy(matched_images: queue.Queue[Path]) -> None:
-    matches_directory = Path("matches")
-    matches_directory.mkdir(exist_ok=True)
-    while not matched_images.empty():
-        image_path = matched_images.get()
-        destination = matches_directory / image_path.name
-        shutil.copy(image_path, destination)
-
-
-def producer_comparison(
-    img_directory: Path, image_queue: queue.Queue[tuple], total_no_images: queue.Queue
-) -> None:
-    try:
-        valid_image_path = load_image(img_directory)
-        total_no_images.put(len(valid_image_path))
-
-        for image_path in valid_image_path:
-            bgr_image_array = cv2.imread(image_path)
-            if bgr_image_array is None:
-                logging.warning(
-                    "Album File %s was unable to be read by imread", image_path
-                )
-                continue
-            image_queue.put((bgr_image_array, image_path))
-    except Exception:
-        logging.exception("Something went wrong in producer_comparison thread")
-    finally:
-        image_queue.put((None, None))
-
-
-def consumer_comparison(
-    target_embeddings: list,
-    result_queue: queue.Queue[Path],
-    image_queue: queue.Queue[tuple],
-    threshold: float,
-    total_no_queues: queue.Queue,
-) -> None:
-
-    total_images = total_no_queues.get()
-    with tqdm(total=total_images, desc="GPU Inference", unit="img") as pbar:
-        target_matrix = np.asarray(target_embeddings)
-        while True:
-            bgr_image_array, image_path = image_queue.get()
-            if bgr_image_array is None:
-                break
-
-            try:
-                rep = DeepFace.represent(
-                    align=True,
-                    img_path=bgr_image_array,
-                    model_name="ArcFace",
-                    enforce_detection=False,
-                    detector_backend="retinaface",
-                    l2_normalize=True,
-                )
-
-                pbar.update(1)
-                pbar.set_postfix(qsize=image_queue.qsize(), refresh=False)
-
-                is_match = False
-                for face in rep:
-                    album_embedding = np.array(face["embedding"])  # type: ignore
-                    cos_sim_matrix = album_embedding @ target_matrix.T
-                    distances = 1.0 - cos_sim_matrix
-                    is_match = bool(np.any(distances <= threshold))
-
-                    if is_match:
-                        break
-                if is_match:
-                    result_queue.put(image_path)
-                    logging.debug("Match Found: %s", image_path.name)
-            except Exception:
-                logging.error("Some error in consumer comparison thread.")
-                logging.warning(
-                    "Probably something wrong with image: %s", image_path.name
-                )
-
-
-def validate_cli_dir(cli_flag_value: Path | None, default_value: str | None) -> Path:
-    if cli_flag_value is not None:
-        try:
-            return cli_flag_value.resolve(strict=True)
-        except FileNotFoundError:
-            logging.warning("Invalid CLI Argument, moving to default values(env)")
-            print("Invalid CLI Argument, moving to default values(env)")
-    if default_value is not None:
-        try:
-            return Path(default_value).resolve(strict=True)
-        except FileNotFoundError:
-            logging.critical("Invalid Default value in .env file. Exiting")
-            print("Invalid Default value. Exiting")
-            sys.exit(1)
-    logging.critical("Exiting: Due to no cli & default arguments")
-    print("Error: No cli argument and empty default. Exiting")
-    sys.exit(1)
+from comparison import consumer_comparison, producer_comparison
+from input_validation import validate_cli_dir
+from my_postprocess import make_copy
+from my_preprocess import target_emb_master
 
 
 def main() -> int:
@@ -201,7 +23,8 @@ def main() -> int:
         filemode="w",
     )
 
-    logging.debug("Program started")
+    logger = logging.getLogger(__name__)
+    logger.debug("Program started")
     load_dotenv()
 
     image_queue = queue.Queue(maxsize=20)
@@ -231,7 +54,7 @@ def main() -> int:
     parser.add_argument(
         "--cache",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Enable or disable use of cached target embeddings",
     )
 
@@ -239,6 +62,13 @@ def main() -> int:
 
     args_target = validate_cli_dir(args.target, target_directory_path)
     args_album = validate_cli_dir(args.album, album_directory_path)
+
+    if args_target is not Path:
+        print("Value of args_target is not defined")
+        return 1
+    if args_album is not Path:
+        print("Value of args_album not defined")
+        return 1
 
     target_embeddings = target_emb_master(args_target, args.cache)
 
@@ -259,7 +89,7 @@ def main() -> int:
         daemon=True,
     )
 
-    logging.debug("Pipeline starts now")
+    logger.debug("Pipeline starts now")
     print("Starting the face matching pipeline")
 
     producer.start()

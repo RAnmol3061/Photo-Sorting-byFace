@@ -16,7 +16,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv pip install pylint -r requirements.txt
+        run: uv pip install -r requirements.txt
 
       - name: Analyse the code with Pylint
         run: pylint --fail-under=9.0 $(git ls-files '*.py')
